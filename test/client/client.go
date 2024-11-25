@@ -1,32 +1,31 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	geerpc "gee-rpc"
-	"gee-rpc/codec"
+	gee_rpc "gee-rpc"
 	"log"
-	"net"
+	"sync"
 )
 
 func main() {
-	conn, _ := net.Dial("tcp", ":6666")
+	log.SetFlags(0)
+	client, _ := gee_rpc.Dial("tcp", ":6666")
 	defer func() {
-		_ = conn.Close()
+		_ = client.Close()
 	}()
 
-	_ = json.NewEncoder(conn).Encode(geerpc.DefaultOption)
-	cc := codec.NewGobCodec(conn)
-
+	var wg sync.WaitGroup
 	for i := 0; i < 5; i++ {
-		h := &codec.Header{
-			ServiceMethod: "Service.Func",
-			Seq:           uint64(i),
-		}
-		_ = cc.Write(h, fmt.Sprintf("geerpc request seq: %d", h.Seq))
-		_ = cc.ReadHeader(h)
-		var reply string
-		_ = cc.ReadBody(&reply)
-		log.Println("reply:", reply)
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			args := fmt.Sprintf("geerpc req %d", i)
+			var reply string
+			if err := client.Call("Foo.Sum", args, &reply); err != nil {
+				log.Fatal("call Foo.Sum error:", err)
+			}
+			log.Println("reply:", reply)
+		}(i)
 	}
+	wg.Wait()
 }
